@@ -1,7 +1,5 @@
 import numpy as np
 import pandas as pd
-from sklearn.metrics import pairwise_distances
-from scipy.spatial.distance import cosine, correlation
 
 #Loading movielens data
 
@@ -26,6 +24,7 @@ df = pd.merge(movie_ratings, tags, how='left', left_on=['user_id', 'movie_id'], 
  #pre-processing
  #dropping colums that aren't needed
 df.drop(df.columns[[3,7]], axis=1, inplace=True)
+
 from sklearn.model_selection import train_test_split
 
 train_base, test_base = train_test_split(df, test_size=0.2)
@@ -43,21 +42,31 @@ for feature in train_base.drop(['rating','title'],axis=1).columns:
     test_base.columns.values[-1] = str(feature) + '_mean'
     print(len(test_base))
 
+# finding global mean rating (on train dataset) for filling NaN values
+mean_rating = train_base['rating'].mean()
+train_base = train_base.fillna(mean_rating)
+test_base = test_base.fillna(mean_rating)
 
+train_x = train_base.loc[:, train_base.columns.str.contains('mean')]
+train_y = train_base.loc[:, 'rating']
 
+test_x = test_base.loc[:, train_base.columns.str.contains('mean')]
+test_y = test_base.loc[:, 'rating']
 
-df.drop(df.columns[[3,4,7]], axis=1, inplace=True)
-ratings.drop( "unix_timestamp", inplace = True, axis = 1 )
-movies.drop(movies.columns[[3,4]], inplace = True, axis = 1 )
+# calling training lib - LinearRegression
+from sklearn import linear_model
+from sklearn.metrics import mean_squared_error
+model = linear_model.LinearRegression()
 
+model.fit(train_x, train_y)
 
-#Pivot Table(This creates a matrix of users and movie_ratings)
-ratings_matrix = ratings.pivot_table(index=['movie_id'],columns=['user_id'],values='rating').reset_index(drop=True)
-ratings_matrix.fillna( 0, inplace = True )
-
-#Cosine Similarity(Creates a cosine matrix of similaraties ..... which is the pairwise distances
-# between two items )
-
-movie_similarity = 1 - pairwise_distances( ratings_matrix.as_matrix(), metric="cosine" )
-np.fill_diagonal( movie_similarity, 0 )
-ratings_matrix = pd.DataFrame( movie_similarity )
+train_pred = model.predict(train_x)
+test_pred = model.predict(test_x)
+# printing results for train and test
+# The coefficients
+print('Coefficients: \n', model.coef_)
+# The mean squared error
+print("Root mean squared error for train: %.2f"
+      % np.sqrt(mean_squared_error(train_y, train_pred)))
+print("Root mean squared error for test: %.2f"
+      % np.sqrt(mean_squared_error(test_y, test_pred)))
